@@ -2,6 +2,8 @@ import typing as t
 import glob
 import os
 
+from Crypto.Cipher import DES
+from Crypto.Random import get_random_bytes
 from solve import display_ppm
 from hash import sha_256_header
 
@@ -9,9 +11,7 @@ from hash import sha_256_header
 ppm_letter_file_paths = glob.glob("letters/*.ppm")
 ppm_header_hashes = []
 
-def read_ppm_header(
-    ppm_path: str, 
-) -> t.Optional[tuple[int]]:
+def read_ppm_header(ppm_path: str):
     try:  
         with open(ppm_path, "rb") as ppm_input:
             # read the PPM file
@@ -26,7 +26,7 @@ def read_ppm_header(
 
 
 def write_ppm_header_details(
-    header: tuple[int],
+    header,
     header_hash: str,
     header_details_path: str,
 ) -> None:
@@ -39,7 +39,13 @@ def write_ppm_header_details(
         header_details_output.write(ppm_letter_details)
 
 
-def write_ppm_without_header(
+def pad_ppm_file(ppm, block_size):
+    padding_size = block_size - len(ppm) % block_size 
+    padding_bytes = bytes([padding_size] * padding_size)
+    return ppm + padding_bytes
+
+
+def encrypt_ppm_without_header(
     ppm_with_headers_path: str,
     ppm_without_header_path: str,
 ) -> None:
@@ -50,8 +56,18 @@ def write_ppm_without_header(
         ppm_bytes = ppm_input.readlines()
 
     with open(ppm_without_header_path, "wb") as ppm_output:
+        # remove the first 3 lines of the PPM file,
+        # which contain the header
         ppm_bytes = b"".join(ppm_bytes[3:])
-        ppm_output.write(ppm_bytes)
+
+        # encrypt the PPM file with AES in ECB mode
+        key = get_random_bytes(8)
+        cipher = DES.new(key, DES.MODE_ECB)
+        # pad the PPM file if necessary
+        ppm_bytes = pad_ppm_file(ppm_bytes, DES.block_size)
+        cipher_text = cipher.encrypt(ppm_bytes)
+
+        ppm_output.write(cipher_text)
 
 def format_ppm() -> None:
     """It will read the PPM files, extract the header
@@ -74,9 +90,10 @@ def format_ppm() -> None:
             header_details_path=ppm_letter_header_details_path
         )
 
-        write_ppm_without_header(
+        encrypt_ppm_without_header(
             ppm_with_headers_path=ppm_letter_file_path,
             ppm_without_header_path=ppm_letter_encrypt_path,
         )
             
-format_ppm()
+# format_ppm()
+display_ppm("letters/encrypt/L.ppm")
